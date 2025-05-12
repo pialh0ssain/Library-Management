@@ -1,9 +1,12 @@
+#include <bits/stdc++.h>
 #include <iostream>
 #include <fstream>
 #include <string>
 #include <vector>
 #include <sstream>
-
+#include <numeric>
+#include <iomanip>
+#include <ctime>
 
 using namespace std;
 
@@ -11,8 +14,14 @@ struct Book {
     string id;
     string title;
     string author;
+    vector<int> ratings;
+    bool isBorrowed;
+
+    Book(string i, string t, string a, bool b = false)
+        : id(i), title(t), author(a), isBorrowed(b) {}
 };
 
+// === Function Declarations ===
 void signUp(string role);
 bool login(string role);
 void adminPanel();
@@ -23,10 +32,24 @@ void viewAllBooks();
 void updateBook();
 void approveUsers();
 void viewApprovedUsers();
+void userPanel(vector<Book>& books);
+void loadBooks(vector<Book>& books);
+void saveBooks(const vector<Book>& books);
+void searchBooks(const vector<Book>& books);
+void borrowBook(vector<Book>& books);
+void returnBook(vector<Book>& books);
+void viewBorrowedBooks(const vector<Book>& books);
+void calculateFineSummary(const vector<Book>& books);
+void rateBook(const vector<Book>& books);
+void viewBookRatings(const vector<Book>& books);
+bool isValidEmail(string email);
+bool isExistingAccount(string gmail);
 
-
-
+// === Main Function ===
 int main() {
+    vector<Book> books;
+    loadBooks(books);
+
     int userType, choice;
     string role;
 
@@ -38,11 +61,9 @@ int main() {
         cout << "Please choose an option: ";
         cin >> userType;
 
-        if (userType == 1) {
-            role = "admin";
-        } else if (userType == 2) {
-            role = "user";
-        } else if (userType == 3) {
+        if (userType == 1) role = "admin";
+        else if (userType == 2) role = "user";
+        else if (userType == 3) {
             cout << "\nExiting the system...\n";
             break;
         } else {
@@ -58,21 +79,15 @@ int main() {
             cout << "Please select an option: ";
             cin >> choice;
 
-            if (choice == 1) {
-                signUp(role);
-            } else if (choice == 2) {
+            if (choice == 1) signUp(role);
+            else if (choice == 2) {
                 if (login(role)) {
-                    if (role == "admin") {
-                        adminPanel();
-                    } else {
-                        userPanel();
-                    }
+                    if (role == "admin") adminPanel();
+                    else userPanel(books);
                 }
-            } else if (choice == 3) {
-                break;
-            } else {
-                cout << "\nInvalid input! Please try again.\n";
             }
+            else if (choice == 3) break;
+            else cout << "\nInvalid input! Please try again.\n";
         }
     }
     return 0;
@@ -396,21 +411,263 @@ void viewApprovedUsers() {
 }
 
 
-void userPanel() {
+void loadBooks(vector<Book>& books) {
+    ifstream inFile("books.txt");
+    string line;
+    while (getline(inFile, line)) {
+        stringstream ss(line);
+        string id, title, author, statusStr;
+        getline(ss, id, '|');
+        getline(ss, title, '|');
+        getline(ss, author, '|');
+        getline(ss, statusStr);
+        bool status = (statusStr == "1");
+        books.emplace_back(id, title, author, status);
+    }
+    inFile.close();
+}
+
+void saveBooks(const vector<Book>& books) {
+    ofstream outFile("books.txt");
+    for (const auto& book : books) {
+        outFile << book.id << "|" << book.title << "|" << book.author << "|"
+                << (book.isBorrowed ? "1" : "0") << endl;
+    }
+    outFile.close();
+}
+void searchBooks(const vector<Book>& books) {
+    string query;
+    cout << "Enter book ID, title, or author to search: ";
+    cin.ignore();
+    getline(cin, query);
+    bool found = false;
+
+    for (const auto& book : books) {
+        // ID, title, or author match
+        if (book.id.find(query) != string::npos ||
+            book.title.find(query) != string::npos ||
+            book.author.find(query) != string::npos) {
+
+            cout << "ID: " << book.id
+                 << ", Title: " << book.title
+                 << ", Author: " << book.author
+                 << ", Status: " << (book.isBorrowed ? "Borrowed" : "Available") << endl;
+            found = true;
+        }
+    }
+
+    if (!found) {
+        cout << "No matching books found.\n";
+    }
+}
+
+
+void borrowBook(vector<Book>& books) {
+    string query;
+    cout << "Enter the book title or ID to borrow: ";
+    cin.ignore();
+    getline(cin, query);
+
+    for (auto& book : books) {
+        if (book.title == query || book.id == query) {
+            if (!book.isBorrowed) {
+                book.isBorrowed = true;
+                saveBooks(books);
+                cout << "You have borrowed \"" << book.title << "\" successfully.\n";
+                return;
+            } else {
+                cout << "Sorry, this book is already borrowed.\n";
+                return;
+            }
+        }
+    }
+
+    cout << "Book not found.\n";
+}
+
+void returnBook(vector<Book>& books) {
+    string query;
+    cout << "Enter the book title or ID to return: ";
+    cin.ignore();
+    getline(cin, query);
+
+    for (auto& book : books) {
+        if (book.title == query || book.id == query) {
+            if (book.isBorrowed) {
+                book.isBorrowed = false;
+                saveBooks(books);
+                cout << "You have returned \"" << book.title << "\" successfully.\n";
+                return;
+            } else {
+                cout << "This book wasn't borrowed.\n";
+                return;
+            }
+        }
+    }
+
+    cout << "Book not found.\n";
+}
+
+void viewBorrowedBooks(const vector<Book>& books) {
+    cout << "Borrowed Books:\n";
+    bool found = false;
+    for (const auto& book : books) {
+        if (book.isBorrowed) {
+            cout << "Title: " << book.title << ", Author: " << book.author << endl;
+            found = true;
+        }
+    }
+    if (!found) cout << "No books currently borrowed.\n";
+}
+
+void calculateFineSummary(const vector<Book>& books) {
+    // Demo version — implement real fine logic if needed
+    cout << "Late Fine Summary:\n";
+    cout << "You have 0 books with late return. Total fine: $0.00\n";
+}
+
+void rateBook(const vector<Book>& books) {
+    string query;
+    int rating;
+
+    cout << "Enter title or ID of the book to rate: ";
+    cin.ignore();
+    getline(cin, query);
+
+    auto it = find_if(books.begin(), books.end(), [&query](const Book& b) {
+        return b.title == query || b.id == query;
+    });
+
+    if (it == books.end()) {
+        cout << "Book not found.\n";
+        return;
+    }
+
+    cout << "Enter your rating (1 to 5): ";
+    cin >> rating;
+
+    if (rating < 1 || rating > 5) {
+        cout << "Invalid rating.\n";
+        return;
+    }
+
+    ofstream outFile("ratings.txt", ios::app);
+    outFile << it->id << "|" << it->title << "|" << rating << "\n";
+    outFile.close();
+
+    cout << "Thanks for rating \"" << it->title << "\"!\n";
+}
+
+
+void viewBookRatings(const vector<Book>& books) {
+    ifstream inFile("ratings.txt");
+    if (!inFile.is_open()) {
+        cerr << "Error: Could not open ratings.txt file.\n";
+        return;
+    }
+
+    map<string, vector<int>> ratings;
+    string line;
+
+    while (getline(inFile, line)) {
+        stringstream ss(line);
+        string idStr, title, rateStr;
+
+        if (!getline(ss, idStr, '|')) continue;
+        if (!getline(ss, title, '|')) continue;
+        if (!getline(ss, rateStr)) continue;
+
+        try {
+            int rate = stoi(rateStr);
+            ratings[title].push_back(rate);
+        } catch (...) {
+            cerr << "Invalid rating line: " << line << endl;
+        }
+    }
+    inFile.close();
+
+    for (const auto& book : books) {
+        cout << "-----------------------------\n";
+        cout << "Title          : " << book.title << endl;
+
+        auto it = ratings.find(book.title);
+        if (it != ratings.end()) {
+            const auto& r = it->second;
+            double avg = accumulate(r.begin(), r.end(), 0.0) / r.size();
+            cout << "Average Rating : " << fixed << setprecision(2) << avg << endl;
+            cout << "Total Ratings  : " << r.size() << endl;
+            cout << "All Ratings    : ";
+            for (int rate : r) {
+                cout << rate << " ";
+            }
+            cout << endl;
+        } else {
+            cout << "No ratings available.\n";
+        }
+    }
+    cout << "-----------------------------\n";
+}
+
+
+
+void view_AllBooks(const vector<Book>& books) {
+    if (books.empty()) {
+        cout << "No books available in the library.\n";
+        return;
+    }
+
+    cout << "\n===== All Books in Library =====\n\n";
+    for (const auto& book : books) {
+        cout << "ID     : " << book.id << endl;
+        cout << "Title  : " << book.title << endl;
+        cout << "Author : " << book.author << endl;
+        cout << "Status : " << (book.isBorrowed ? "Borrowed" : "Available") << endl;
+        cout << "----------------------------------\n";
+    }
+}
+
+
+
+
+// User Panel
+void userPanel(vector<Book>& books) {
     int choice;
     while (true) {
         cout << "\n===== User Panel =====\n";
-        cout << "1. Search for Books (Coming Soon)\n";
-        cout << "2. Borrow Books (Coming Soon)\n";
-        cout << "3. Logout & Return\n";
+        cout << "1. Search for Books\n";
+        cout << "2. Borrow Books\n";
+        cout << "3. Return Books\n";
+        cout << "4. View Borrowed Books\n";
+        cout << "5. View Late Fine Summary\n";
+        cout << "6. Rate a Book\n";
+        cout << "7. View Book Ratings\n";
+        cout << "8. Logout & Return\n";
+        cout << "9. View All Books\n";
+
         cout << "Please select an option: ";
         cin >> choice;
 
-        if (choice == 3) {
+        if (choice == 1) {
+            searchBooks(books);
+        } else if (choice == 2) {
+            borrowBook(books);
+        } else if (choice == 3) {
+            returnBook(books);
+        } else if (choice == 4) {
+            viewBorrowedBooks(books);
+        } else if (choice == 5) {
+            calculateFineSummary(books);
+        } else if (choice == 6) {
+            rateBook(books);
+        } else if (choice == 7) {
+            viewBookRatings(books);
+        } else if (choice == 8) {
             cout << "\nLogging out... Returning to Main Menu.\n";
             break;
+        } else if (choice == 9) {
+            view_AllBooks(books);
         } else {
-            cout << "\nFeature under development. Please check back later.\n";
+            cout << "\nInvalid option. Please try again.\n";
         }
     }
 }
